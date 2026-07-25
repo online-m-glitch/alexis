@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Ordenador de rutas</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg:#14171c;
+    --panel:#1b2028;
+    --panel-2:#20262f;
+    --ink:#e9e6df;
+    --ink-dim:#9aa0ab;
+    --border:#2c333c;
+    --amber:#f2a83d;
+    --amber-dim:#8a6428;
+    --blue:#4fa3d1;
+    --green:#5fae7c;
+    --danger:#d9705f;
+    --mono: ui-monospace, SFMono-Regular, "Roboto Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, "Segoe UI", system-ui, Roboto, Helvetica, Arial, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--ink); font-family:var(--sans);
+    padding:28px 16px 60px;
+  }
+  .sheet{
+    max-width:920px; margin:0 auto; background:var(--panel);
+    border:1px solid var(--border); border-radius:6px; overflow:hidden;
+    position:relative;
+  }
+  .perf{
+    display:flex; gap:6px; padding:10px 18px; background:var(--panel-2);
+    border-bottom:1px dashed var(--border);
+  }
+  .perf span{width:6px;height:6px;border-radius:50%;background:var(--border);}
+  .head{
+    padding:22px 28px 18px; border-bottom:1px solid var(--border);
+  }
+  .eyebrow{
+    font-family:var(--mono); font-size:11px; letter-spacing:.14em; color:var(--amber);
+    text-transform:uppercase; margin:0 0 6px;
+  }
+  h1{
+    margin:0; font-size:26px; font-weight:800; letter-spacing:-0.01em;
+    font-stretch:condensed; text-transform:uppercase;
+  }
+  .sub{color:var(--ink-dim); font-size:13.5px; margin-top:8px; line-height:1.5; max-width:60ch;}
+  .body-pad{padding:24px 28px;}
+  .step{margin-bottom:28px;}
+  .step-label{
+    font-family:var(--mono); font-size:11px; color:var(--ink-dim); letter-spacing:.08em;
+    text-transform:uppercase; margin-bottom:10px; display:flex; align-items:center; gap:8px;
+  }
+  .step-label b{color:var(--amber); font-size:13px;}
+  .drop{
+    border:1.5px dashed var(--border); border-radius:6px; padding:26px;
+    text-align:center; cursor:pointer; transition:border-color .15s, background .15s;
+  }
+  .drop:hover, .drop.drag{border-color:var(--amber); background:rgba(242,168,61,0.05);}
+  .drop input{display:none;}
+  .drop .big{font-size:14px; color:var(--ink);}
+  .drop .small{font-size:12px; color:var(--ink-dim); margin-top:4px;}
+  select, button, input[type=text]{
+    font-family:var(--sans); font-size:13px; border-radius:4px; border:1px solid var(--border);
+    background:var(--panel-2); color:var(--ink); padding:7px 10px;
+  }
+  select:focus, input:focus{outline:1.5px solid var(--amber); outline-offset:1px;}
+  button{
+    cursor:pointer; font-weight:600; letter-spacing:.02em;
+  }
+  .btn-primary{background:var(--amber); color:#1b1400; border:none;}
+  .btn-primary:hover{background:#ffb84f;}
+  .btn-ghost{background:transparent; color:var(--ink-dim); border:1px solid var(--border);}
+  .btn-ghost:hover{color:var(--ink); border-color:var(--ink-dim);}
+  .btn-primary:disabled{opacity:.4; cursor:not-allowed;}
+  .map-grid{display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-top:10px;}
+  .map-field label{display:block; font-size:11.5px; color:var(--ink-dim); margin-bottom:5px;}
+  .map-field select{width:100%;}
+  .pending{border:1px solid var(--amber-dim); border-radius:6px; padding:14px 16px; background:rgba(242,168,61,.04);}
+  .pending-row{
+    display:grid; grid-template-columns:1fr 170px; gap:10px; align-items:center;
+    padding:8px 0; border-bottom:1px solid var(--border);
+  }
+  .pending-row:last-child{border-bottom:none;}
+  .addr-text{font-family:var(--mono); font-size:13px;}
+  .addr-sub{font-size:11px; color:var(--ink-dim); margin-top:2px;}
+  .zona-badge{
+    display:inline-flex; align-items:center; gap:6px; font-family:var(--mono); font-size:11px;
+    padding:3px 9px; border-radius:3px; text-transform:uppercase; letter-spacing:.04em;
+    background:var(--panel-2); border:1px solid var(--border); color:var(--ink-dim); cursor:pointer;
+  }
+  .zona-badge:hover{border-color:var(--blue); color:var(--ink);}
+  .zona-dot{width:7px;height:7px;border-radius:50%;background:var(--blue);}
+  .group{margin-bottom:22px;}
+  .group-head{
+    display:flex; align-items:baseline; gap:10px; margin-bottom:8px;
+    padding-bottom:6px; border-bottom:1px solid var(--border);
+  }
+  .group-head .n{font-family:var(--mono); font-size:11px; color:var(--amber);}
+  .group-head h3{margin:0; font-size:15px; text-transform:uppercase; letter-spacing:.03em; font-stretch:condensed;}
+  .group-head .count{font-size:11.5px; color:var(--ink-dim); font-family:var(--mono);}
+  table{width:100%; border-collapse:collapse; font-size:13px;}
+  td{padding:7px 6px; border-bottom:1px solid var(--border); vertical-align:top;}
+  td.num{font-family:var(--mono); color:var(--ink-dim); width:26px;}
+  td.addr{font-family:var(--mono);}
+  td.meta{color:var(--ink-dim); font-size:12px;}
+  td.maps-cell{width:52px; text-align:right;}
+  .maps-link{
+    font-family:var(--mono); font-size:11px; text-transform:uppercase; letter-spacing:.04em;
+    color:var(--blue); text-decoration:none; border-bottom:1px dotted var(--blue);
+  }
+  .maps-link:hover{color:#8fc7e8;}
+  .route-links{display:flex; flex-wrap:wrap; gap:14px; margin-top:10px;}
+  .route-link{
+    font-family:var(--mono); font-size:12px; color:var(--amber); text-decoration:none;
+    border:1px solid var(--amber-dim); padding:5px 10px; border-radius:4px;
+  }
+  .route-link:hover{background:rgba(242,168,61,.1); border-color:var(--amber);}
+  .foot-actions{display:flex; gap:10px; margin-top:22px; flex-wrap:wrap; align-items:center;}
+  .note{font-size:11.5px; color:var(--ink-dim); margin-top:14px; line-height:1.6;}
+  .stat-line{font-family:var(--mono); font-size:12px; color:var(--green); margin-top:10px;}
+  .err{color:var(--danger); font-size:12.5px; margin-top:8px;}
+  .new-zona-input{display:none; gap:6px; margin-top:6px;}
+  .new-zona-input.show{display:flex;}
+  ::selection{background:var(--amber); color:#1b1400;}
+</style>
+</head>
+<body>
+<div class="sheet">
+  <div class="perf"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+  <div class="head">
+    <p class="eyebrow">Hoja de ruta &mdash; 001</p>
+    <h1>Ordenador de direcciones</h1>
+    <p class="sub">Subí la planilla de trabajos y el listado sale agrupado por zona. El sistema recuerda qué calle va en qué zona: la próxima planilla, las calles repetidas ya salen clasificadas solas.</p>
+  </div>
+
+  <div class="body-pad">
+
+    <div class="step" id="step-upload">
+      <div class="step-label"><b>1</b> Subir planilla</div>
+      <div class="drop" id="drop">
+        <input type="file" id="file" accept=".xlsx,.xls,.csv">
+        <div class="big">Hacé clic o arrastrá el archivo (.xlsx, .xls, .csv)</div>
+        <div class="small">Tiene que tener una columna con la dirección</div>
+      </div>
+      <div class="err" id="upload-err"></div>
+    </div>
+
+    <div class="step" id="step-map" style="display:none;">
+      <div class="step-label"><b>2</b> Marcar columnas</div>
+      <div class="map-grid">
+        <div class="map-field">
+          <label>Dirección (obligatorio)</label>
+          <select id="col-addr"></select>
+        </div>
+        <div class="map-field">
+          <label>Cliente / lugar (opcional)</label>
+          <select id="col-cliente"></select>
+        </div>
+        <div class="map-field">
+          <label>Técnico / responsable (opcional)</label>
+          <select id="col-tecnico"></select>
+        </div>
+      </div>
+      <div class="foot-actions">
+        <button class="btn-primary" id="btn-procesar">Procesar planilla</button>
+        <span class="err" id="map-err"></span>
+      </div>
+    </div>
+
+    <div class="step" id="step-pending" style="display:none;">
+      <div class="step-label"><b>3</b> Calles nuevas &mdash; asignar zona <span id="pending-count"></span></div>
+      <div class="pending" id="pending-list"></div>
+      <div class="foot-actions">
+        <button class="btn-primary" id="btn-aplicar">Aplicar y generar listado</button>
+      </div>
+    </div>
+
+    <div class="step" id="step-result" style="display:none;">
+      <div class="step-label"><b>4</b> Listado por zona</div>
+      <div id="result-groups"></div>
+      <div class="foot-actions">
+        <button class="btn-primary" id="btn-export">Descargar planilla ordenada</button>
+        <button class="btn-ghost" id="btn-reset">Cargar otra planilla</button>
+      </div>
+      <div class="stat-line" id="stat-line"></div>
+    </div>
+
+    <div class="note">
+      Las calles largas (avenidas que cruzan varias zonas) se guardan por tramo de altura, no por nombre completo &mdash; así "Av. Santa Fe 900" y "Av. Santa Fe 2600" pueden quedar en zonas distintas sin pisarse. El diccionario de calles queda guardado en este navegador para la próxima vez. Cada dirección tiene un link directo a Google Maps, y cada zona tiene un link de ruta con todas sus paradas en orden (se corta en tramos de 10 si la zona tiene más direcciones, por el límite de Google Maps).
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const ZONA_DEFAULT_ORDER = ["La Boca","Barracas","Balvanera / Congreso","Retiro","Recoleta","Recoleta / Palermo","Palermo","Sin asignar"];
+  const SEED_DICT = {
+    "avmartingarcia|500":"La Boca","ruydiazdeguzman|800":"La Boca","benitoquinquelamartin|1700":"La Boca","brandsen|1700":"La Boca",
+    "avmontesdeoca|200":"Barracas","avmontesdeoca|1200":"Barracas","avmontesdeoca|1300":"Barracas","avmontesdeoca|1400":"Barracas",
+    "larrea|1000":"Balvanera / Congreso","presjoseevaristouriburu|1000":"Balvanera / Congreso","ecuador|1400":"Balvanera / Congreso","ecuador|1500":"Balvanera / Congreso","jdperon|1500":"Balvanera / Congreso","avrivadavia|3400":"Balvanera / Congreso",
+    "avstafe|900":"Retiro","suipacha|1300":"Retiro",
+    "avpueyrredon|1700":"Recoleta","laprida|1600":"Recoleta","avcallao|2000":"Recoleta","juncal|2300":"Recoleta","juncal|2400":"Recoleta","lasheras|2600":"Recoleta","vicentelopez|2200":"Recoleta","drnorbertoquirnocosta|1200":"Recoleta",
+    "avstafe|2600":"Recoleta / Palermo","pena|2700":"Recoleta / Palermo","juncal|2700":"Recoleta / Palermo","avgrallasheras|2900":"Recoleta / Palermo","arenales|2800":"Recoleta / Palermo","arenales|3000":"Recoleta / Palermo","austria|1700":"Recoleta / Palermo","drtomasmanueldeanchorena|1400":"Recoleta / Palermo",
+    "araoz|2900":"Palermo","uriarte|1400":"Palermo","juncal|3500":"Palermo"
+  };
+
+  let rawRows = [];      // array of raw row objects (header->value) as parsed from sheet
+  let headers = [];
+  let processed = [];    // {addr, cliente, tecnico, streetKey, blockKey, zona}
+  let dict = {};         // streetBlockKey -> zona
+  let zonaOrder = ZONA_DEFAULT_ORDER.slice();
+  let pendingKeys = [];  // unique blockKeys needing a zona
+
+  const $ = (id) => document.getElementById(id);
+
+  async function loadDict(){
+    try{
+      const r = await window.storage.get('street-zona-dict', false);
+      dict = r ? JSON.parse(r.value) : {...SEED_DICT};
+      if(!r){ await window.storage.set('street-zona-dict', JSON.stringify(dict), false); }
+    }catch(e){ dict = {...SEED_DICT}; }
+  }
+  async function saveDict(){
+    try{ await window.storage.set('street-zona-dict', JSON.stringify(dict), false); }
+    catch(e){ console.error('No se pudo guardar el diccionario', e); }
+  }
+  async function loadZonaOrder(){
+    try{
+      const r = await window.storage.get('zona-order', false);
+      zonaOrder = r ? JSON.parse(r.value) : ZONA_DEFAULT_ORDER.slice();
+      if(!r){ await window.storage.set('zona-order', JSON.stringify(zonaOrder), false); }
+    }catch(e){ zonaOrder = ZONA_DEFAULT_ORDER.slice(); }
+  }
+  async function saveZonaOrder(){
+    try{ await window.storage.set('zona-order', JSON.stringify(zonaOrder), false); }
+    catch(e){ console.error('No se pudo guardar el orden de zonas', e); }
+  }
+
+  function normStreet(s){
+    if(!s) return "";
+    let t = s.toString().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+    t = t.toLowerCase();
+    t = t.replace(/\bavda\.?\b/g,"av").replace(/\bavenida\b/g,"av").replace(/\bav\.\b/g,"av");
+    t = t.replace(/[^\p{L}\p{N}\s]/gu," ");
+    t = t.replace(/\s+/g," ").trim();
+    t = t.replace(/\s/g,"");
+    return t;
+  }
+
+  function splitAddress(addr){
+    const s = (addr||"").toString().trim();
+    const m = s.match(/^(.*?)[\s,]+(\d{1,5})\s*$/);
+    if(!m) return {street:s, number:null};
+    return {street:m[1].trim(), number:parseInt(m[2],10)};
+  }
+
+  function blockKeyOf(addr){
+    const {street, number} = splitAddress(addr);
+    const streetKey = normStreet(street);
+    if(!streetKey) return null;
+    const block = (number!=null) ? Math.floor(number/100)*100 : 0;
+    return streetKey + "|" + block;
+  }
+
+  // ---------- File upload ----------
+  const drop = $('drop'), fileInput = $('file');
+  drop.addEventListener('click', ()=>fileInput.click());
+  drop.addEventListener('dragover', e=>{e.preventDefault(); drop.classList.add('drag');});
+  drop.addEventListener('dragleave', ()=>drop.classList.remove('drag'));
+  drop.addEventListener('drop', e=>{
+    e.preventDefault(); drop.classList.remove('drag');
+    if(e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+  });
+  fileInput.addEventListener('change', e=>{
+    if(e.target.files.length) handleFile(e.target.files[0]);
+  });
+
+  function handleFile(file){
+    $('upload-err').textContent = "";
+    const reader = new FileReader();
+    reader.onerror = ()=> $('upload-err').textContent = "No se pudo leer el archivo.";
+    reader.onload = (e)=>{
+      try{
+        const data = new Uint8Array(e.target.result);
+        const wb = XLSX.read(data, {type:'array'});
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(sheet, {defval:""});
+        if(!rows.length){ $('upload-err').textContent = "La planilla parece vacía."; return; }
+        rawRows = rows;
+        headers = Object.keys(rows[0]);
+        fillColumnSelects();
+        $('step-map').style.display = 'block';
+      }catch(err){
+        $('upload-err').textContent = "No pude leer ese archivo. Probá exportarlo como .xlsx o .csv.";
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  function fillColumnSelects(){
+    const guess = (kw)=>headers.find(h=>kw.test(h.toString()));
+    const addrGuess = guess(/direcc|domicilio|address/i) || headers[0];
+    const clienteGuess = guess(/cliente|empresa|nombre|lugar/i);
+    const tecnicoGuess = guess(/tecnic|responsable|vallone|técnico/i);
+
+    function opts(selected){
+      return ['<option value="">(ninguna)</option>'].concat(
+        headers.map(h=>`<option value="${h}" ${h===selected?'selected':''}>${h}</option>`)
+      ).join('');
+    }
+    $('col-addr').innerHTML = opts(addrGuess).replace('<option value="">(ninguna)</option>','');
+    $('col-cliente').innerHTML = opts(clienteGuess);
+    $('col-tecnico').innerHTML = opts(tecnicoGuess);
+  }
+
+  // ---------- Process ----------
+  $('btn-procesar').addEventListener('click', async ()=>{
+    const addrCol = $('col-addr').value;
+    if(!addrCol){ $('map-err').textContent = "Falta marcar la columna de dirección."; return; }
+    $('map-err').textContent = "";
+    const clienteCol = $('col-cliente').value;
+    const tecnicoCol = $('col-tecnico').value;
+
+    await loadDict();
+    await loadZonaOrder();
+
+    processed = rawRows.map(r=>{
+      const addr = (r[addrCol]||"").toString().trim();
+      const key = blockKeyOf(addr);
+      return {
+        addr,
+        cliente: clienteCol ? (r[clienteCol]||"").toString().trim() : "",
+        tecnico: tecnicoCol ? (r[tecnicoCol]||"").toString().trim() : "",
+        blockKey: key,
+        zona: key && dict[key] ? dict[key] : ""
+      };
+    }).filter(r=>r.addr);
+
+    const unknownKeys = [...new Set(processed.filter(r=>!r.zona && r.blockKey).map(r=>r.blockKey))];
+    pendingKeys = unknownKeys;
+
+    if(pendingKeys.length){
+      renderPending();
+      $('step-pending').style.display = 'block';
+      $('step-result').style.display = 'none';
+    }else{
+      $('step-pending').style.display = 'none';
+      renderResult();
+    }
+  });
+
+  function sampleAddrFor(key){
+    const row = processed.find(r=>r.blockKey===key);
+    return row ? row.addr : key;
+  }
+
+  function renderPending(){
+    $('pending-count').textContent = `(${pendingKeys.length})`;
+    const box = $('pending-list');
+    box.innerHTML = pendingKeys.map((key,i)=>{
+      const sample = sampleAddrFor(key);
+      const countSame = processed.filter(r=>r.blockKey===key).length;
+      return `
+      <div class="pending-row" data-key="${key}">
+        <div>
+          <div class="addr-text">${sample}</div>
+          <div class="addr-sub">${countSame>1? countSame+' direcciones en este tramo':'1 dirección'}</div>
+        </div>
+        <div>
+          <select class="pending-zona" data-idx="${i}" style="width:100%;">
+            ${zonaOrder.map(z=>`<option value="${z}">${z}</option>`).join('')}
+            <option value="__new__">+ Nueva zona…</option>
+          </select>
+          <div class="new-zona-input" data-idx="${i}">
+            <input type="text" class="new-zona-text" placeholder="Nombre de zona" style="flex:1;">
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+
+    box.querySelectorAll('.pending-zona').forEach(sel=>{
+      sel.addEventListener('change', (e)=>{
+        const idx = e.target.getAttribute('data-idx');
+        const wrap = box.querySelector(`.new-zona-input[data-idx="${idx}"]`);
+        wrap.classList.toggle('show', e.target.value === '__new__');
+      });
+    });
+  }
+
+  $('btn-aplicar').addEventListener('click', async ()=>{
+    const rows = document.querySelectorAll('#pending-list .pending-row');
+    rows.forEach(row=>{
+      const key = row.getAttribute('data-key');
+      const sel = row.querySelector('.pending-zona');
+      let zona = sel.value;
+      if(zona === '__new__'){
+        const txt = row.querySelector('.new-zona-text').value.trim();
+        zona = txt || 'Sin asignar';
+        if(txt && !zonaOrder.includes(txt)){
+          zonaOrder.splice(zonaOrder.length-1, 0, txt); // insert before "Sin asignar"
+        }
+      }
+      dict[key] = zona;
+    });
+    await saveDict();
+    await saveZonaOrder();
+    processed.forEach(r=>{ if(r.blockKey && dict[r.blockKey]) r.zona = dict[r.blockKey]; });
+    $('step-pending').style.display = 'none';
+    renderResult();
+  });
+
+  function mapsSearchUrl(addr){
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addr + ', CABA')}`;
+  }
+  function mapsRouteUrl(addrs){
+    if(addrs.length===1) return mapsSearchUrl(addrs[0]);
+    const origin = encodeURIComponent(addrs[0] + ', CABA');
+    const destination = encodeURIComponent(addrs[addrs.length-1] + ', CABA');
+    const mid = addrs.slice(1,-1).map(a=>encodeURIComponent(a + ', CABA')).join('|');
+    let url = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&travelmode=driving`;
+    if(mid) url += `&waypoints=${mid}`;
+    return url;
+  }
+  function chunkArray(arr, size){
+    const out = [];
+    for(let i=0;i<arr.length;i+=size) out.push(arr.slice(i,i+size));
+    return out;
+  }
+  const MAX_STOPS_PER_LINK = 10;
+
+  function renderResult(){
+    const groups = {};
+    processed.forEach(r=>{
+      const z = r.zona || 'Sin asignar';
+      (groups[z] = groups[z] || []).push(r);
+    });
+    const orderedZonas = zonaOrder.filter(z=>groups[z]).concat(Object.keys(groups).filter(z=>!zonaOrder.includes(z)));
+
+    let n = 0;
+    const html = orderedZonas.map((zona, gi)=>{
+      const rows = groups[zona].slice().sort((a,b)=>{
+        const sa = splitAddress(a.addr), sb = splitAddress(b.addr);
+        const c = sa.street.localeCompare(sb.street, 'es');
+        if(c!==0) return c;
+        return (sa.number||0)-(sb.number||0);
+      });
+      const rowsHtml = rows.map(r=>{
+        n++;
+        return `<tr>
+          <td class="num">${n}</td>
+          <td class="addr">${r.addr}</td>
+          <td class="meta">${[r.cliente,r.tecnico].filter(Boolean).join(' · ')}</td>
+          <td class="maps-cell"><a class="maps-link" href="${mapsSearchUrl(r.addr)}" target="_blank" rel="noopener">Maps</a></td>
+        </tr>`;
+      }).join('');
+
+      const addrList = rows.map(r=>r.addr);
+      const chunks = chunkArray(addrList, MAX_STOPS_PER_LINK);
+      const routeLinks = chunks.map((chunk, ci)=>{
+        const label = chunks.length>1 ? `Ruta de la zona &mdash; parte ${ci+1}/${chunks.length}` : 'Ruta de la zona';
+        return `<a class="route-link" href="${mapsRouteUrl(chunk)}" target="_blank" rel="noopener">${label} &rarr;</a>`;
+      }).join('');
+
+      return `
+      <div class="group">
+        <div class="group-head">
+          <span class="n">${String(gi+1).padStart(2,'0')}</span>
+          <h3>${zona}</h3>
+          <span class="count">${rows.length} ${rows.length===1?'dirección':'direcciones'}</span>
+        </div>
+        <table>${rowsHtml}</table>
+        <div class="route-links">${routeLinks}</div>
+      </div>`;
+    }).join('');
+
+    $('result-groups').innerHTML = html;
+    $('step-result').style.display = 'block';
+    $('stat-line').textContent = `${processed.length} direcciones ordenadas en ${orderedZonas.length} zonas.`;
+    window._lastOrderedZonas = orderedZonas;
+    window._lastGroups = groups;
+  }
+
+  $('btn-export').addEventListener('click', ()=>{
+    try{
+      const out = [];
+      (window._lastOrderedZonas||[]).forEach(zona=>{
+        const rows = (window._lastGroups[zona]||[]).slice().sort((a,b)=>{
+          const sa = splitAddress(a.addr), sb = splitAddress(b.addr);
+          const c = sa.street.localeCompare(sb.street,'es');
+          if(c!==0) return c;
+          return (sa.number||0)-(sb.number||0);
+        });
+        rows.forEach(r=>out.push({Zona:zona, Direccion:r.addr, Cliente:r.cliente, Tecnico:r.tecnico}));
+      });
+      const ws = XLSX.utils.json_to_sheet(out);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Ruta ordenada");
+      XLSX.writeFile(wb, "ruta_ordenada.xlsx");
+    }catch(e){
+      alert("No se pudo generar el archivo de descarga.");
+    }
+  });
+
+  $('btn-reset').addEventListener('click', ()=>{
+    rawRows=[]; headers=[]; processed=[]; pendingKeys=[];
+    fileInput.value = "";
+    $('step-map').style.display='none';
+    $('step-pending').style.display='none';
+    $('step-result').style.display='none';
+    $('upload-err').textContent=""; $('map-err').textContent="";
+  });
+
+  loadDict(); loadZonaOrder();
+})();
+</script>
+</body>
+</html>
